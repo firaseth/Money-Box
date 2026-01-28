@@ -2,19 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-main: #f8fafc;
+  --text-main: #0f172a;
+  --panel-bg: rgba(255, 255, 255, 0.7);
+  --panel-border: rgba(255, 255, 255, 0.2);
+  --card-bg: rgba(255, 255, 255, 0.4);
+  --accent: #4F46E5;
+  --sidebar-bg: rgba(255, 255, 255, 0.8);
+  --input-bg: rgba(248, 250, 252, 0.5);
+}
+
+[data-theme='dark'] {
+  --bg-main: #020617;
+  --text-main: #f1f5f9;
+  --panel-bg: rgba(15, 23, 42, 0.7);
+  --panel-border: rgba(255, 255, 255, 0.05);
+  --card-bg: rgba(15, 23, 42, 0.4);
+  --accent: #818cf8;
+  --sidebar-bg: rgba(15, 23, 42, 0.8);
+  --input-bg: rgba(15, 23, 42, 0.5);
+}
+
+[data-theme='cyber'] {
+  --bg-main: #050505;
+  --text-main: #00ff41;
+  --panel-bg: rgba(0, 0, 0, 0.8);
+  --panel-border: #00ff4133;
+  --card-bg: rgba(0, 0, 0, 0.4);
+  --accent: #00ff41;
+  --sidebar-bg: rgba(0, 0, 0, 0.9);
+  --input-bg: rgba(0, 0, 0, 0.5);
+}
+
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased selection:bg-indigo-100 selection:text-indigo-900;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    @apply antialiased selection:bg-indigo-100 selection:text-indigo-900 transition-colors duration-500;
   }
 }
 
 @layer components {
   .glass-panel {
-    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-xl shadow-slate-200/50;
+    background-color: var(--panel-bg);
+    border-color: var(--panel-border);
+    @apply backdrop-blur-xl border shadow-xl transition-all duration-300;
   }
-  
+
   .glass-card {
-    @apply bg-white/40 backdrop-blur-md border border-white/20 shadow-lg shadow-slate-100/50 hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300;
+    background-color: var(--card-bg);
+    border-color: var(--panel-border);
+    @apply backdrop-blur-md border shadow-lg hover:shadow-xl transition-all duration-300;
   }
 
   .nav-item-active {
@@ -22,7 +61,7 @@
   }
 
   .nav-item-inactive {
-    @apply text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all duration-200;
+    @apply text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 transition-all duration-200;
   }
 
   .btn-primary {
@@ -30,7 +69,9 @@
   }
 
   .input-field {
-    @apply w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all duration-200 placeholder:text-slate-400;
+    background-color: var(--input-bg);
+    border-color: var(--panel-border);
+    @apply w-full px-4 py-2.5 rounded-xl border focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all duration-200 placeholder:text-slate-400;
   }
 }
 
@@ -48,9 +89,17 @@
 }
 
 @keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
 }
 
 .animate-float {

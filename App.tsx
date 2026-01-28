@@ -34,11 +34,16 @@ import {
   Mail,
   Video,
   Megaphone,
-  LifeBuoy
+  LifeBuoy,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, TransactionType } from './types';
 import { cn } from './utils';
+
+type Theme = 'light' | 'dark' | 'cyber';
 
 // --- Components ---
 
@@ -58,7 +63,7 @@ const StatCard = ({ title, value, icon: Icon, trend, colorClass }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    className="glass-panel p-6 rounded-2xl border border-white/40 shadow-xl shadow-slate-200/50"
+    className="glass-panel p-6 rounded-2xl border shadow-xl"
   >
     <div className="flex items-center justify-between mb-4">
       <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">{title}</span>
@@ -66,7 +71,7 @@ const StatCard = ({ title, value, icon: Icon, trend, colorClass }) => (
         <Icon className="w-5 h-5" />
       </div>
     </div>
-    <p className="text-3xl font-black text-slate-900 font-mono tracking-tight">{value}</p>
+    <p className="text-3xl font-black font-mono tracking-tight">{value}</p>
     {trend && (
       <div className="mt-4 flex items-center gap-2">
         <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600")}>+12.5%</span>
@@ -80,6 +85,15 @@ const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState('personal-budget');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [logoTheme, setLogoTheme] = useState<'light' | 'dark' | 'brand'>('light');
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('app_theme');
+    return (saved as Theme) || 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('app_theme', theme);
+  }, [theme]);
 
   // Budget State
   const [personalTransactions, setPersonalTransactions] = useState<Transaction[]>(() => {
@@ -818,17 +832,17 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-transparent flex flex-col md:flex-row selection:bg-indigo-100 selection:text-indigo-900 overflow-x-hidden">
       {/* Sidebar */}
-      <aside className="w-full md:w-80 bg-white/80 backdrop-blur-2xl border-r border-slate-100 flex flex-col sticky top-0 h-auto md:h-screen z-50 overflow-y-auto">
-        <div className="p-10 border-b border-slate-50">
+      <aside className="w-full md:w-80 bg-[var(--sidebar-bg)] backdrop-blur-2xl border-r border-slate-100 dark:border-slate-800 flex flex-col sticky top-0 h-auto md:h-screen z-50 overflow-y-auto transition-colors duration-500">
+        <div className="p-10 border-b border-slate-50 dark:border-slate-800">
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-4 mb-3"
           >
             <LogoIcon className="w-10 h-10 text-indigo-600 drop-shadow-lg" />
-            <h1 className="text-2xl font-black tracking-tighter text-slate-900 uppercase">MoneyBox</h1>
+            <h1 className="text-2xl font-black tracking-tighter uppercase">MoneyBox</h1>
           </motion.div>
           <div className="h-1 w-12 bg-indigo-600 rounded-full mb-3"></div>
           <p className="text-[10px] font-black text-slate-400 tracking-[0.3em] uppercase">Hyperflow Control</p>
@@ -866,12 +880,33 @@ const App: React.FC = () => {
           })}
         </nav>
 
-        <div className="p-8 border-t border-slate-50">
-          <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 group cursor-pointer hover:bg-white transition-colors">
-            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center font-black italic text-slate-800 shadow-sm">MB</div>
+        <div className="p-8 border-t border-slate-50 space-y-6">
+          <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner">
+            {[
+              { id: 'light', icon: Sun, label: 'Light' },
+              { id: 'dark', icon: Moon, label: 'Dark' },
+              { id: 'cyber', icon: Zap, label: 'Cyber' }
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id as Theme)}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  theme === t.id
+                    ? "bg-white dark:bg-slate-800 text-indigo-600 shadow-md transform scale-[1.05] z-10"
+                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                )}
+              >
+                <t.icon className="w-3.5 h-3.5" />
+              </button>
+            ))}
+          </div>
+
+          <div className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center gap-4 group cursor-pointer hover:bg-white dark:hover:bg-slate-900 transition-colors">
+            <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-black italic text-slate-800 dark:text-slate-200 shadow-sm">MB</div>
             <div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status</p>
-              <p className="text-xs font-black text-slate-900 uppercase flex items-center gap-2">
+              <p className="text-xs font-black uppercase flex items-center gap-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Synchronized
               </p>
             </div>
