@@ -36,6 +36,32 @@ export interface SupportFAQ {
   answer: string;
 }
 
+
+export interface SecuritySettings {
+  isLocked: boolean;
+  pin: string | null;
+  privacyMode: boolean;
+}
+
+export interface Notification {
+  id: string;
+  type: 'alert' | 'bill' | 'security';
+  title: string;
+  message: string;
+  date: string;
+  isRead: boolean;
+}
+
+export interface Bill {
+  id: string;
+  description: string;
+  amount: number;
+  dueDate: string;
+  category: string;
+  isPaid: boolean;
+  frequency: 'monthly' | 'weekly' | 'annually';
+}
+
 // Budget Types
 export type TransactionType = 'income' | 'expense';
 
@@ -46,6 +72,7 @@ export interface Transaction {
   amount: number;
   category: string;
   type: TransactionType;
+  billId?: string; // Link to a bill if it's a bill payment
 }
 
 export interface BudgetSummary {

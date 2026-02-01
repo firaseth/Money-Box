@@ -1,14 +1,14 @@
 
 import React from 'react';
-import { 
-  Palette, 
-  Share2, 
-  Mail, 
-  Video, 
-  BarChart3, 
-  Target, 
-  Megaphone, 
-  CheckSquare, 
+import {
+  Palette,
+  Share2,
+  Mail,
+  Video,
+  BarChart3,
+  Target,
+  Megaphone,
+  CheckSquare,
   LifeBuoy,
   Layout,
   Sparkles,
@@ -22,6 +22,8 @@ import {
 export const NAVIGATION = [
   { id: 'personal-budget', name: 'Personal Budget', icon: Wallet },
   { id: 'firm-budget', name: 'Firm Budget', icon: Building2 },
+  { id: 'bills', name: 'Monthly Bills', icon: CheckSquare },
+  { id: 'reports', name: 'Budget Reports', icon: BarChart3 },
   { id: 'brand', name: 'Brand Assets', icon: Layout },
   { id: 'logo-gen', name: 'AI Logo Studio', icon: Sparkles },
   { id: 'social', name: 'Social Media', icon: Share2 },

@@ -37,10 +37,21 @@ import {
   LifeBuoy,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  Lock,
+  Eye,
+  EyeOff,
+  Bell,
+  AlertCircle,
+  Calendar,
+  Receipt,
+  FileText,
+  Clock,
+  Unlock,
+  BarChart3
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
-import { Transaction, TransactionType } from './types';
+import { Transaction, TransactionType, SecuritySettings, Bill, Notification } from './types';
 import { cn } from './utils';
 
 type Theme = 'light' | 'dark' | 'cyber';
@@ -59,11 +70,11 @@ const LogoIcon = ({ className = "w-12 h-12", variant = "default" }) => {
   );
 };
 
-const StatCard = ({ title, value, icon: Icon, trend, colorClass }) => (
+const StatCard = ({ title, value, icon: Icon, trend, colorClass, privacyMode = false }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
-    className="glass-panel p-6 rounded-2xl border shadow-xl"
+    className="glass-panel p-6 rounded-2xl border shadow-xl transition-all"
   >
     <div className="flex items-center justify-between mb-4">
       <span className="text-sm font-bold text-slate-400 uppercase tracking-widest">{title}</span>
@@ -71,13 +82,56 @@ const StatCard = ({ title, value, icon: Icon, trend, colorClass }) => (
         <Icon className="w-5 h-5" />
       </div>
     </div>
-    <p className="text-3xl font-black font-mono tracking-tight">{value}</p>
+    <p className={cn(
+      "text-3xl font-black font-mono tracking-tight transition-all duration-500",
+      privacyMode ? "blur-md select-none opacity-50" : "blur-0"
+    )}>
+      {value}
+    </p>
     {trend && (
       <div className="mt-4 flex items-center gap-2">
         <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600")}>+12.5%</span>
         <span className="text-xs text-slate-400 font-medium">vs last month</span>
       </div>
     )}
+  </motion.div>
+);
+
+const LockScreen = ({ enteredPin, setEnteredPin, onUnlock, pinError }) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-6"
+  >
+    <div className="max-w-md w-full glass-panel p-10 rounded-[3rem] border border-white/10 text-center space-y-8 shadow-2xl">
+      <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center mx-auto shadow-2xl shadow-indigo-500/50">
+        <Lock className="w-10 h-10 text-white" />
+      </div>
+      <div>
+        <h2 className="text-3xl font-black text-white tracking-tight uppercase">Box Locked</h2>
+        <p className="text-slate-400 font-medium mt-2">Enter your security PIN to access the vault.</p>
+      </div>
+      <div className="space-y-4">
+        <input
+          type="password"
+          value={enteredPin}
+          onChange={(e) => setEnteredPin(e.target.value)}
+          placeholder="••••"
+          maxLength={4}
+          className={cn(
+            "w-full text-center text-4xl font-black tracking-[1em] py-6 bg-slate-800/50 border rounded-3xl focus:ring-4 focus:ring-indigo-500/20 transition-all text-white",
+            pinError ? "border-rose-500 animate-shake" : "border-white/10"
+          )}
+        />
+        {pinError && <p className="text-rose-500 text-xs font-black uppercase tracking-widest">Invalid Security Key</p>}
+        <button
+          onClick={onUnlock}
+          className="btn-primary w-full py-5 rounded-3xl font-black uppercase tracking-widest"
+        >
+          Unlock Vault
+        </button>
+      </div>
+    </div>
   </motion.div>
 );
 
@@ -121,12 +175,163 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
-    localStorage.setItem('personal_tx', JSON.stringify(personalTransactions));
-  }, [personalTransactions]);
-
-  useEffect(() => {
     localStorage.setItem('firm_tx', JSON.stringify(firmTransactions));
   }, [firmTransactions]);
+
+  // Security & Settings State
+  const [security, setSecurity] = useState<SecuritySettings>(() => {
+    const saved = localStorage.getItem('app_security');
+    return saved ? JSON.parse(saved) : { isLocked: false, pin: null, privacyMode: false };
+  });
+
+  const [enteredPin, setEnteredPin] = useState('');
+  const [pinError, setPinError] = useState(false);
+
+  // Bills & Notifications State
+  const [bills, setBills] = useState<Bill[]>(() => {
+    const saved = localStorage.getItem('app_bills');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [notifications, setNotifications] = useState<Notification[]>(() => {
+    const saved = localStorage.getItem('app_notifications');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('app_security', JSON.stringify(security));
+  }, [security]);
+
+  useEffect(() => {
+    localStorage.setItem('app_bills', JSON.stringify(bills));
+  }, [bills]);
+
+  useEffect(() => {
+    localStorage.setItem('app_notifications', JSON.stringify(notifications));
+  }, [notifications]);
+
+  // Alert Logic
+  useEffect(() => {
+    const personalStats = getStats(personalTransactions);
+    const firmStats = getStats(firmTransactions);
+
+    const checkBudgetAlert = (balance: number, income: number, type: string) => {
+      if (income > 0 && balance < -0.2 * income) {
+        const title = `${type} Budget Alert`;
+        const message = `Your ${type.toLowerCase()} budget balance is down by more than 20% of your total income. Please review your expenses.`;
+
+        // Add notification if not already present recently
+        if (!notifications.some(n => n.title === title && new Date(n.date).toDateString() === new Date().toDateString())) {
+          const newNotif: Notification = {
+            id: Math.random().toString(36).substr(2, 9),
+            type: 'alert',
+            title,
+            message,
+            date: new Date().toISOString(),
+            isRead: false
+          };
+          setNotifications(prev => [newNotif, ...prev]);
+        }
+      }
+    };
+
+    checkBudgetAlert(personalStats.balance, personalStats.income, 'Personal');
+    checkBudgetAlert(firmStats.balance, firmStats.income, 'Firm');
+  }, [personalTransactions, firmTransactions]);
+
+  // Bill Notification Logic
+  useEffect(() => {
+    const today = new Date();
+    bills.forEach(bill => {
+      const dueDate = new Date(bill.dueDate);
+      const diffTime = dueDate.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 3 && diffDays >= 0 && !bill.isPaid) {
+        const title = `Bill Due Soon: ${bill.description}`;
+        if (!notifications.some(n => n.title === title && new Date(n.date).toDateString() === new Date().toDateString())) {
+          setNotifications(prev => [{
+            id: Math.random().toString(36).substr(2, 9),
+            type: 'bill',
+            title,
+            message: `Your bill for ${bill.description} ($${bill.amount}) is due in ${diffDays} days.`,
+            date: new Date().toISOString(),
+            isRead: false
+          }, ...prev]);
+        }
+      }
+    });
+  }, [bills]);
+
+  const handleUnlock = () => {
+    if (security.pin === enteredPin) {
+      setSecurity({ ...security, isLocked: false });
+      setEnteredPin('');
+      setPinError(false);
+    } else {
+      setPinError(true);
+      setEnteredPin('');
+    }
+  };
+
+  const handleSetPin = (newPin: string) => {
+    setSecurity({ ...security, pin: newPin, isLocked: false });
+  };
+
+  const togglePrivacyMode = () => {
+    setSecurity({ ...security, privacyMode: !security.privacyMode });
+  };
+
+  const [billForm, setBillForm] = useState({
+    description: '',
+    amount: '',
+    dueDate: new Date().toISOString().split('T')[0],
+    category: 'Subscription',
+    frequency: 'monthly' as 'monthly' | 'weekly' | 'annually'
+  });
+
+  const handleAddBill = () => {
+    if (!billForm.description || !billForm.amount) return;
+    const newBill: Bill = {
+      id: Math.random().toString(36).substr(2, 9),
+      description: billForm.description,
+      amount: parseFloat(billForm.amount),
+      dueDate: billForm.dueDate,
+      category: billForm.category,
+      isPaid: false,
+      frequency: billForm.frequency
+    };
+    setBills([newBill, ...bills]);
+    setBillForm({
+      description: '',
+      amount: '',
+      dueDate: new Date().toISOString().split('T')[0],
+      category: 'Subscription',
+      frequency: 'monthly'
+    });
+  };
+
+  const markBillPaid = (id: string) => {
+    setBills(bills.map(b => {
+      if (b.id === id) {
+        // Add as transaction
+        const newTx: Transaction = {
+          id: Math.random().toString(36).substr(2, 9),
+          description: `Bill Payment: ${b.description}`,
+          amount: b.amount,
+          category: b.category,
+          type: 'expense',
+          date: new Date().toISOString().split('T')[0],
+          billId: b.id
+        };
+        setPersonalTransactions([newTx, ...personalTransactions]);
+        return { ...b, isPaid: true };
+      }
+      return b;
+    }));
+  };
 
   const handleAddTransaction = (isFirm: boolean) => {
     if (!txForm.description || !txForm.amount) return;
@@ -230,6 +435,7 @@ const App: React.FC = () => {
             icon={ArrowUpRight}
             colorClass="bg-emerald-50 text-emerald-600"
             trend={true}
+            privacyMode={security.privacyMode}
           />
           <StatCard
             title="Total Outflow"
@@ -237,6 +443,7 @@ const App: React.FC = () => {
             icon={ArrowDownRight}
             colorClass="bg-rose-50 text-rose-600"
             trend={true}
+            privacyMode={security.privacyMode}
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -248,13 +455,19 @@ const App: React.FC = () => {
             </div>
             <div className="relative z-10">
               <span className="text-xs font-bold text-indigo-100 uppercase tracking-widest block mb-4">Net Box Performance</span>
-              <p className="text-4xl font-black font-mono tracking-tighter">${balance.toLocaleString()}</p>
+              <p className={cn(
+                "text-4xl font-black font-mono tracking-tighter transition-all duration-500",
+                security.privacyMode ? "blur-md select-none opacity-50" : "blur-0"
+              )}>
+                ${balance.toLocaleString()}
+              </p>
               <div className="mt-6 flex items-center gap-2 text-indigo-100 text-sm font-bold">
                 <Shield className="w-4 h-4" /> Secure & Optimized
               </div>
             </div>
           </motion.div>
         </div>
+        {/* ... Rest of budget view ... */}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           <div className="lg:col-span-4">
@@ -398,6 +611,192 @@ const App: React.FC = () => {
         return renderBudgetView(false);
       case 'firm-budget':
         return renderBudgetView(true);
+      case 'bills':
+        return (
+          <div className="space-y-12">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+              <div>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase">Monthly Obligations</h2>
+                <p className="text-slate-500 mt-2 font-medium max-w-lg">Track and manage recurring payments and subscriptions.</p>
+              </div>
+              <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-sm">
+                <button className="px-6 py-2 bg-white text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl">Upcoming</button>
+                <button className="px-6 py-2 text-slate-400 hover:text-slate-600 text-[10px] font-black uppercase tracking-widest transition-all">History</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+              <div className="lg:col-span-4 box-border">
+                <div className="glass-panel p-8 rounded-3xl border border-white/40 shadow-2xl space-y-6">
+                  <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-3">
+                    <Receipt className="w-6 h-6 text-indigo-600" /> New Bill
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Description</label>
+                      <input
+                        type="text"
+                        value={billForm.description}
+                        onChange={(e) => setBillForm({ ...billForm, description: e.target.value })}
+                        placeholder="e.g. AWS Cloud Services"
+                        className="input-field"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</label>
+                        <input
+                          type="number"
+                          value={billForm.amount}
+                          onChange={(e) => setBillForm({ ...billForm, amount: e.target.value })}
+                          placeholder="0.00"
+                          className="input-field"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Due Date</label>
+                        <input
+                          type="date"
+                          value={billForm.dueDate}
+                          onChange={(e) => setBillForm({ ...billForm, dueDate: e.target.value })}
+                          className="input-field"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleAddBill}
+                      className="btn-primary w-full py-4 uppercase tracking-[0.2em] font-black"
+                    >
+                      Record Obligation
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-8 space-y-6">
+                <div className="glass-panel rounded-3xl overflow-hidden border border-white/40 shadow-2xl">
+                  {bills.length === 0 ? (
+                    <div className="p-20 text-center space-y-4">
+                      <Clock className="w-12 h-12 text-slate-200 mx-auto" />
+                      <p className="font-black text-slate-400 uppercase tracking-widest">No pending bills</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {bills.map(bill => (
+                        <div key={bill.id} className="p-8 flex items-center justify-between hover:bg-slate-50 transition-all">
+                          <div className="flex items-center gap-6">
+                            <div className={cn(
+                              "w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg",
+                              bill.isPaid ? "bg-emerald-50 text-emerald-500" : "bg-indigo-50 text-indigo-500"
+                            )}>
+                              <Calendar className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h4 className="font-black text-slate-900 uppercase tracking-tight">{bill.description}</h4>
+                              <p className="text-xs text-slate-400 font-bold mt-1">Due {bill.dueDate} • {bill.category}</p>
+                            </div>
+                          </div>
+                          <div className="text-right flex items-center gap-8">
+                            <div>
+                              <p className="text-xl font-black font-mono tracking-tighter">${bill.amount.toLocaleString()}</p>
+                              <p className={cn("text-[10px] font-black uppercase mt-1", bill.isPaid ? "text-emerald-500" : "text-rose-500")}>
+                                {bill.isPaid ? 'Settled' : 'Pending'}
+                              </p>
+                            </div>
+                            {!bill.isPaid && (
+                              <button
+                                onClick={() => markBillPaid(bill.id)}
+                                className="px-6 py-2.5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-black shadow-xl"
+                              >
+                                Pay Now
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      case 'reports':
+        const getReportData = () => {
+          const txs = [...personalTransactions, ...firmTransactions];
+          const { income, expenses, balance } = getStats(txs);
+          return { income, expenses, balance };
+        };
+        const report = getReportData();
+        return (
+          <div className="space-y-12">
+            <div className="flex justify-between items-end">
+              <div>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight uppercase">Strategic Analysis</h2>
+                <p className="text-slate-500 mt-2 font-medium">Holistic view of your financial performance across all sectors.</p>
+              </div>
+              <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                {['Weekly', 'Monthly', 'Annual'].map(p => (
+                  <button key={p} className={cn(
+                    "px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                    p === 'Monthly' ? "bg-white text-indigo-600 shadow-xl" : "text-slate-400 hover:text-slate-600"
+                  )}>{p}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="glass-panel p-10 rounded-[3rem] border border-white/40 shadow-2xl">
+                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 mb-6 shadow-indigo-100 shadow-lg">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Aggregate Income</h4>
+                <p className={cn(
+                  "text-4xl font-black font-mono tracking-tighter text-slate-900 transition-all duration-500",
+                  security.privacyMode ? "blur-md select-none opacity-50" : "blur-0"
+                )}>
+                  ${report.income.toLocaleString()}
+                </p>
+              </div>
+              <div className="glass-panel p-10 rounded-[3rem] border border-white/40 shadow-2xl">
+                <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600 mb-6 shadow-rose-100 shadow-lg">
+                  <TrendingUp className="w-6 h-6 rotate-180" />
+                </div>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Burn Rate</h4>
+                <p className={cn(
+                  "text-4xl font-black font-mono tracking-tighter text-slate-900 transition-all duration-500",
+                  security.privacyMode ? "blur-md select-none opacity-50" : "blur-0"
+                )}>
+                  ${report.expenses.toLocaleString()}
+                </p>
+              </div>
+              <div className="glass-panel p-10 rounded-[3rem] border border-white/40 shadow-2xl bg-slate-900">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-white mb-6">
+                  <Target className="w-6 h-6" />
+                </div>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Net Growth</h4>
+                <p className={cn(
+                  "text-4xl font-black font-mono tracking-tighter text-white transition-all duration-500",
+                  security.privacyMode ? "blur-md select-none opacity-50" : "blur-0"
+                )}>
+                  ${report.balance.toLocaleString()}
+                </p>
+              </div>
+            </div>
+
+            <div className="glass-panel p-12 rounded-[3.5rem] border border-white/40 shadow-2xl min-h-[400px] flex items-center justify-center text-center">
+              <div className="space-y-6">
+                <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto outline outline-8 outline-indigo-50/50">
+                  <BarChart3 className="w-10 h-10 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Visualization Matrix Loading</h3>
+                  <p className="text-slate-400 font-medium max-w-sm mx-auto mt-2">Integrating full visual analytics and transaction heatmaps for high-fidelity decision making.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
       case 'brand':
         return (
           <div className="space-y-20">
@@ -833,8 +1232,17 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-transparent flex flex-col md:flex-row selection:bg-indigo-100 selection:text-indigo-900 overflow-x-hidden">
-      {/* Sidebar */}
-      <aside className="w-full md:w-80 bg-[var(--sidebar-bg)] backdrop-blur-2xl border-r border-slate-100 dark:border-slate-800 flex flex-col sticky top-0 h-auto md:h-screen z-50 overflow-y-auto transition-colors duration-500">
+      {security.isLocked && security.pin && (
+        <LockScreen
+          enteredPin={enteredPin}
+          setEnteredPin={setEnteredPin}
+          onUnlock={handleUnlock}
+          pinError={pinError}
+        />
+      )}
+
+      {/* Sidebar Navigation */}
+      <aside className="w-full md:w-80 bg-white border-r border-slate-100 dark:border-slate-800 flex flex-col sticky top-0 h-auto md:h-screen z-50 overflow-y-auto transition-colors duration-500">
         <div className="p-10 border-b border-slate-50 dark:border-slate-800">
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -862,79 +1270,161 @@ const App: React.FC = () => {
                 className={cn(
                   "w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 relative group",
                   isActive
-                    ? "nav-item-active"
-                    : "nav-item-inactive"
+                    ? "bg-slate-900 text-white shadow-2xl shadow-slate-300 scale-[1.02]"
+                    : "text-slate-400 hover:bg-slate-50 hover:text-slate-900"
                 )}
               >
-                <Icon className={cn("w-5 h-5 transition-transform duration-300 group-hover:scale-110", isActive ? "text-white" : "text-slate-400")} />
+                <Icon className={cn("w-5 h-5 transition-transform duration-300 group-hover:scale-110", isActive ? "text-indigo-400" : "text-slate-400")} />
                 <span className="font-bold text-sm tracking-tight">{item.name}</span>
-                {isActive && (
-                  <motion.div
-                    layoutId="active-nav"
-                    className="absolute inset-0 bg-indigo-600 -z-10 rounded-2xl shadow-xl shadow-indigo-200"
-                  />
-                )}
-                {isActive && <ChevronRight className="w-4 h-4 ml-auto opacity-50" />}
               </motion.button>
             );
           })}
         </nav>
 
-        <div className="p-8 border-t border-slate-50 space-y-6">
+        <div className="p-8 border-t border-slate-50 dark:border-slate-800 space-y-6">
           <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-inner">
             {[
-              { id: 'light', icon: Sun, label: 'Light' },
-              { id: 'dark', icon: Moon, label: 'Dark' },
-              { id: 'cyber', icon: Zap, label: 'Cyber' }
+              { id: 'light', icon: Sun },
+              { id: 'dark', icon: Moon },
+              { id: 'cyber', icon: Zap }
             ].map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTheme(t.id as Theme)}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                  theme === t.id
-                    ? "bg-white dark:bg-slate-800 text-indigo-600 shadow-md transform scale-[1.05] z-10"
-                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  "flex-1 flex items-center justify-center py-2 rounded-lg transition-all",
+                  theme === t.id ? "bg-white dark:bg-slate-800 text-indigo-600 shadow-md" : "text-slate-400"
                 )}
               >
-                <t.icon className="w-3.5 h-3.5" />
+                <t.icon className="w-4 h-4" />
               </button>
             ))}
           </div>
 
-          <div className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center gap-4 group cursor-pointer hover:bg-white dark:hover:bg-slate-900 transition-colors">
-            <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center font-black italic text-slate-800 dark:text-slate-200 shadow-sm">MB</div>
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status</p>
-              <p className="text-xs font-black uppercase flex items-center gap-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Synchronized
-              </p>
-            </div>
-          </div>
+          {!security.pin ? (
+            <button
+              onClick={() => {
+                const pin = prompt("Set a 4-digit PIN for security:");
+                if (pin && pin.length === 4) handleSetPin(pin);
+              }}
+              className="w-full py-3 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all flex items-center justify-center gap-2"
+            >
+              <Shield className="w-4 h-4" /> Setup Security
+            </button>
+          ) : (
+            <button
+              onClick={() => setSecurity({ ...security, isLocked: true })}
+              className="w-full py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200"
+            >
+              <Lock className="w-4 h-4" /> Lock Box
+            </button>
+          )}
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 max-h-screen overflow-y-auto hide-scrollbar">
-        <div className="max-w-6xl mx-auto p-10 md:p-20 relative">
+      <main className="flex-1 max-h-screen overflow-y-auto hide-scrollbar bg-slate-50/50">
+        <header className="h-28 flex items-center justify-between px-12 border-b border-slate-100 sticky top-0 z-40 bg-white/80 backdrop-blur-3xl">
+          <div className="flex items-center gap-4">
+            <h2 className="text-sm font-black text-slate-900 uppercase tracking-[0.3em]">
+              {NAVIGATION.find(n => n.id === activeSection)?.name}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-100 rounded-2xl shadow-sm">
+              <button
+                onClick={togglePrivacyMode}
+                className={cn(
+                  "p-2 rounded-xl transition-all",
+                  security.privacyMode ? "bg-slate-900 text-white shadow-lg" : "text-slate-400 hover:text-slate-600"
+                )}
+              >
+                {security.privacyMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+              <div className="w-[1px] h-4 bg-slate-100"></div>
+              <div className="relative">
+                <button
+                  onClick={() => setIsNotifOpen(!isNotifOpen)}
+                  className={cn(
+                    "p-2 transition-all",
+                    notifications.some(n => !n.isRead) ? "text-indigo-600" : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  <Bell className="w-4 h-4" />
+                  {notifications.some(n => !n.isRead) && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {isNotifOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                      className="absolute top-full right-0 mt-4 w-96 bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 overflow-hidden p-6 z-[60]"
+                    >
+                      <div className="flex items-center justify-between mb-6 border-b border-slate-50 pb-4">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest">In-App Alerts</h4>
+                        <button
+                          onClick={() => setNotifications(notifications.map(n => ({ ...n, isRead: true })))}
+                          className="text-[8px] font-black text-indigo-600 uppercase tracking-widest"
+                        >Clear All</button>
+                      </div>
+                      <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <p className="text-center py-10 text-slate-400 text-xs font-medium">No new notifications</p>
+                        ) : (
+                          notifications.map(n => (
+                            <div key={n.id} className={cn(
+                              "p-4 rounded-2xl border transition-all",
+                              n.isRead ? "bg-slate-50/50 border-slate-50" : "bg-indigo-50/30 border-indigo-100"
+                            )}>
+                              <div className="flex gap-4">
+                                <div className={cn(
+                                  "p-2 rounded-xl h-fit",
+                                  n.type === 'alert' ? "bg-rose-100 text-rose-600" : "bg-indigo-100 text-indigo-600"
+                                )}>
+                                  {n.type === 'alert' ? <AlertCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                                </div>
+                                <div>
+                                  <p className="font-black text-[10px] text-slate-900 uppercase tracking-tight">{n.title}</p>
+                                  <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">{n.message}</p>
+                                  <p className="text-[8px] text-slate-400 mt-2 font-black uppercase">{new Date(n.date).toLocaleTimeString()}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white font-black text-xs shadow-xl shadow-slate-200">MB</div>
+          </div>
+        </header>
+
+        <div className="max-w-6xl mx-auto p-12 relative">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeSection}
-              initial={{ opacity: 0, y: 30 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -30 }}
-              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
             >
               {renderSection()}
             </motion.div>
           </AnimatePresence>
 
-          <footer className="mt-32 pt-10 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6 opacity-40 hover:opacity-100 transition-opacity">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">© 2026 MoneyBox Labs Protocol</p>
-            <div className="flex gap-8 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-              <a href="#" className="hover:text-indigo-600 transition-colors">Integrations</a>
-              <a href="#" className="hover:text-indigo-600 transition-colors">Security</a>
-              <a href="#" className="hover:text-indigo-600 transition-colors">Log</a>
+          <footer className="mt-20 pt-10 border-t border-slate-100 flex justify-between items-center opacity-40">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">© 2026 MoneyBox Labs</p>
+            <div className="flex gap-6">
+              <Shield className="w-4 h-4" />
+              <Lock className="w-4 h-4" />
             </div>
           </footer>
         </div>
